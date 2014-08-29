@@ -50,7 +50,7 @@ class TaskTracker @Inject() (state: State, config: MarathonConf) {
         get(appName).remove(stagedTask)
         stagedTask.toBuilder
           .setStartedAt(System.currentTimeMillis)
-          .addStatuses(status)
+          .setStatus(status)
           .build
 
       case _ =>
@@ -60,7 +60,7 @@ class TaskTracker @Inject() (state: State, config: MarathonConf) {
           .setId(taskId)
           .setStagedAt(System.currentTimeMillis)
           .setStartedAt(System.currentTimeMillis)
-          .addStatuses(status)
+          .setStatus(status)
           .build
     }
     get(appName) += task
@@ -103,7 +103,7 @@ class TaskTracker @Inject() (state: State, config: MarathonConf) {
       case Some(task) =>
         get(appName).remove(task)
         val updatedTask = task.toBuilder
-          .addStatuses(status)
+          .setStatus(status)
           .build
         get(appName) += updatedTask
         store(appName).map(_ => Some(updatedTask))

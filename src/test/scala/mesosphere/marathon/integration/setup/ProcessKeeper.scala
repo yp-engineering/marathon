@@ -31,7 +31,7 @@ object ProcessKeeper {
     val injector = Guice.createInjector(new MetricsModule, new HttpModule(conf), new IntegrationTestModule)
     val http = injector.getInstance(classOf[HttpService])
     services = http :: services
-    http.start()
+    http.startAsync().awaitRunning()
   }
 
   def startZooKeeper(port: Int, workDir: String) {
@@ -89,7 +89,7 @@ object ProcessKeeper {
   }
 
   def stopAllServices(): Unit = {
-    services.foreach(s => Try(s.stop()))
+    services.foreach(s => Try(s.stopAsync().awaitTerminated()))
     services = Nil
   }
 

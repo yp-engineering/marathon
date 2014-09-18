@@ -17,6 +17,7 @@ import mesosphere.marathon.state.AppDefinition
 import mesosphere.marathon.tasks.{ PortsMatcher, TaskTracker }
 import mesosphere.mesos.protos.{ RangesResource, Resource, ScalarResource }
 
+import scala.collection.immutable.Seq
 import scala.util.{ Failure, Success, Try }
 
 class TaskBuilder(app: AppDefinition,
@@ -53,7 +54,7 @@ class TaskBuilder(app: AppDefinition,
       Executor.dispatch(app.executor)
     }
 
-    val ports = portsResource.ranges.flatMap(_.asScala())
+    val ports = portsResource.ranges.flatMap(_.asScala()).to[Seq]
 
     val taskId = newTaskId(app.id)
     val builder = TaskInfo.newBuilder
@@ -70,7 +71,7 @@ class TaskBuilder(app: AppDefinition,
     executor match {
       case CommandExecutor() =>
         builder.setCommand(TaskBuilder.commandInfo(app, ports))
-        for (c <- app.container) builder.setContainer(c.toProto)
+        for (c <- app.container) builder.setContainer(c.toProto())
 
       case PathExecutor(path) =>
         val executorId = f"marathon-${taskId.getValue}" // Fresh executor
@@ -83,7 +84,7 @@ class TaskBuilder(app: AppDefinition,
         val info = ExecutorInfo.newBuilder()
           .setExecutorId(ExecutorID.newBuilder().setValue(executorId))
           .setCommand(command)
-        for (c <- app.container) info.setContainer(c.toProto)
+        for (c <- app.container) info.setContainer(c.toProto())
         builder.setExecutor(info)
         val binary = new ByteArrayOutputStream()
         mapper.writeValue(binary, app)
@@ -208,19 +209,13 @@ object TaskBuilder {
   }
 
   private def isExtract(stringuri: String): Boolean = {
-    if (stringuri.endsWith(".tgz") ||
+    stringuri.endsWith(".tgz") ||
       stringuri.endsWith(".tar.gz") ||
       stringuri.endsWith(".tbz2") ||
       stringuri.endsWith(".tar.bz2") ||
       stringuri.endsWith(".txz") ||
       stringuri.endsWith(".tar.xz") ||
-      stringuri.endsWith(".zip")) {
-      return true;
-    }
-    else {
-      return false;
-    }
-
+      stringuri.endsWith(".zip")
   }
 
   def environment(vars: Map[String, String]) = {

@@ -2,15 +2,10 @@ package mesosphere.marathon.state
 
 import java.net.URL
 import javax.inject.Inject
-import scala.concurrent.Future
-import scala.util.{ Failure, Success }
-import scala.collection.mutable
 
 import akka.event.EventStream
 import com.google.inject.Singleton
 import com.google.inject.name.Named
-import org.apache.log4j.Logger
-
 import mesosphere.marathon.api.ModelValidation
 import mesosphere.marathon.event.{ EventModule, GroupChangeFailed, GroupChangeSuccess }
 import mesosphere.marathon.io.PathFun
@@ -19,6 +14,12 @@ import mesosphere.marathon.tasks.TaskTracker
 import mesosphere.marathon.upgrade._
 import mesosphere.marathon.{ MarathonConf, MarathonSchedulerService, PortRangeExhaustedException }
 import mesosphere.util.ThreadPoolContext.context
+import org.apache.log4j.Logger
+
+import scala.collection.immutable.Seq
+import scala.collection.mutable
+import scala.concurrent.Future
+import scala.util.{ Failure, Success }
 
 /**
   * The group manager is the facade for all group related actions.
@@ -142,7 +143,7 @@ class GroupManager @Singleton @Inject() (
       //Since the path is derived from the content itself,
       //it will only change, if the content changes.
       val downloads = mutable.Map(paths.toSeq.filterNot{ case (url, path) => storage.item(path).exists }: _*)
-      val actions = mutable.ListBuffer.empty[ResolveArtifacts]
+      val actions = Seq.newBuilder[ResolveArtifacts]
       group.updateApp(group.version) { app =>
         if (app.storeUrls.isEmpty) app else {
           val storageUrls = app.storeUrls.map(paths).map(storage.item(_).url)
@@ -151,7 +152,7 @@ class GroupManager @Singleton @Inject() (
           if (appDownloads.nonEmpty) actions += ResolveArtifacts(resolved, appDownloads)
           resolved
         }
-      } -> actions
+      } -> actions.result()
     }
   }
 
@@ -165,7 +166,7 @@ class GroupManager @Singleton @Inject() (
       port
     }
     def appPorts(app: AppDefinition) = {
-      val alreadyAssigned = mutable.Queue(from.app(app.id).map(_.ports).getOrElse(Nil).filter(portRange.contains): _*)
+      val alreadyAssigned = mutable.Queue(from.app(app.id).map(_.ports).getOrElse(Nil).filter(portRange.contains(_)): _*)
       def nextFreeAppPort = if (alreadyAssigned.nonEmpty) alreadyAssigned.dequeue() else nextGlobalFreePort
       val ports = app.ports.map { port => if (port == 0) nextFreeAppPort else port }
       app.copy(ports = ports)

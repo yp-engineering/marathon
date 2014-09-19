@@ -22,7 +22,7 @@ class TaskQueue {
   // we used SynchronizedPriorityQueue before, but it has been deprecated
   // because it is not safe to use
   protected[tasks] var queue =
-    new PriorityBlockingQueue[QueuedTask](11, AppConstraintsOrdering)
+    new PriorityBlockingQueue[QueuedTask](11, AppConstraintsOrdering.reverse)
 
   def list: Seq[QueuedTask] = queue.asScala.to[scala.collection.immutable.Seq]
 
@@ -50,9 +50,9 @@ class TaskQueue {
   def addAll(xs: Seq[QueuedTask]): Unit = queue.addAll(xs.asJavaCollection)
 
   def removeAll(): Seq[QueuedTask] = {
-    val builder = mutable.Seq.empty[QueuedTask]
-    queue.removeAll(builder.asJava)
-    builder.to[Seq]
+    val builder = new java.util.ArrayList[QueuedTask]()
+    queue.drainTo(builder)
+    builder.asScala.to[Seq]
   }
 
 }

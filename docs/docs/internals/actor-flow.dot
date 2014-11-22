@@ -1,0 +1,116 @@
+# To generate a PNG of this diagram, run
+# $ dot -Tpng docs/docs/internals/actor-flow.dot > docs/docs/internals/actor-flow.png
+
+digraph flow {
+
+  //////////////////////////////////////////////////////////////////////////
+  // Nodes
+  //////////////////////////////////////////////////////////////////////////
+
+  node [shape=rectangle, style=filled, fontsize=32.0]
+
+    subgraph actors {
+      node [fillcolor=palegreen]
+        MarathonSchedulerActor
+        SubscribersKeeperActor
+        HttpEventActor
+        HistoryActor
+        HealthCheckActor
+        HealthCheckWorkerActor
+        DeploymentManager
+        DeploymentActor
+        AppStartActor
+        AppStopActor
+        StopActor
+        TaskStartActor
+        TaskKillActor
+        ResolveArtifactsActor
+        PromiseActor
+    }
+
+  subgraph nonactors {
+    node [fillcolor=skyblue]
+      HttpCallbackSubscriptionService
+      HttpEventModule
+      MarathonHealthCheckManager
+      MarathonScheduler
+      MarathonSchedulerService
+      MarathonModule
+  }
+
+  //////////////////////////////////////////////////////////////////////////
+  // Edges
+  //////////////////////////////////////////////////////////////////////////
+
+  edge [fontsize=14.0]
+
+    subgraph create {
+      edge [color=purple, label="<create>", style=dashed]
+        HttpEventModule -> HttpEventActor
+        HttpEventModule -> SubscribersKeeperActor
+        HealthCheckActor -> HealthCheckWorkerActor
+        MarathonHealthCheckManager -> HealthCheckActor
+        MarathonModule -> MarathonSchedulerActor
+        MarathonSchedulerActor -> DeploymentManager
+        MarathonSchedulerActor -> HistoryActor
+        MarathonSchedulerActor -> TaskKillActor
+        MarathonSchedulerActor -> PromiseActor
+        DeploymentActor -> AppStartActor
+        DeploymentActor -> AppStopActor
+        DeploymentActor -> TaskStartActor
+        DeploymentActor -> TaskKillActor
+        DeploymentActor -> ResolveArtifactsActor
+        DeploymentManager -> DeploymentActor
+        DeploymentManager -> StopActor
+    }
+
+  subgraph tell {
+    edge [color=black]
+      HealthCheckActor -> HealthCheckActor [label="Tick"]
+      HealthCheckActor -> HealthCheckWorkerActor [label="HealthCheckJob"]
+      HealthCheckActor -> MarathonHealthCheckManager [label="Option[Health]"]
+      HealthCheckWorkerActor -> HealthCheckActor [label="HealthResult"]
+      MarathonHealthCheckManager -> HealthCheckActor [label="HealthResult"]
+      MarathonScheduler -> MarathonSchedulerActor [label="ScaleApp"]
+      MarathonSchedulerActor -> MarathonSchedulerActor [label="RecoveredDeployments"]
+      MarathonSchedulerActor -> MarathonSchedulerActor [label="ReconcileHealthChecks"]
+      MarathonSchedulerActor -> sender [label="ReconcileTasks.answer"]
+      MarathonSchedulerActor -> DeploymentManager [label="CancelConflictingDeployments"]
+      MarathonSchedulerActor -> DeploymentManager [label="CancelDeployment"]
+      MarathonSchedulerActor -> DeploymentManager [label="RetrieveRunningDeployments"]
+      MarathonSchedulerActor -> sender [label="CommandFailed"]
+      MarathonSchedulerActor -> MarathonSchedulerService [label="Deploy.answer"]
+      MarathonSchedulerActor -> MarathonSchedulerService [label="ReconcileTasks.answer"]
+      MarathonSchedulerActor -> MarathonScheduler [label="ScaleApp.answer"]
+      MarathonSchedulerActor -> MarathonSchedulerService [label="KillTasks.answer"]
+      MarathonSchedulerService -> MarathonSchedulerActor [label="Deploy"]
+      MarathonSchedulerService -> MarathonSchedulerActor [label="CancelDeployment"]
+      MarathonSchedulerService -> MarathonSchedulerActor [label="ReconcileTasks"]
+      MarathonSchedulerService -> MarathonSchedulerActor [label="ReconcileHealthChecks"]
+      MarathonSchedulerService -> MarathonSchedulerActor [label="KillTasks"]
+      DeploymentActor -> DeploymentActor [label="NextStep"]
+      DeploymentActor -> DeploymentActor [label="Cancel"]
+      DeploymentActor -> DeploymentManager [label="DeploymentStepInfo"]
+      DeploymentActor -> DeploymentManager [label="DeploymentFinished"]
+      DeploymentActor -> receiver [label="Finished"]
+      DeploymentActor -> receiver [label="Status.Failure"]
+      DeploymentManager -> MarathonSchedulerActor [label="ConflictingDeploymentsCanceled"]
+      DeploymentManager -> MarathonSchedulerActor [label="DeploymentCanceled"]
+      DeploymentManager -> sender [label="Status.Failure"]
+      DeploymentManager -> MarathonSchedulerActor [label="RunningDeployments"]
+      StopActor -> DeploymentActor [label="Cancel"]
+  }
+
+  subgraph ask {
+    edge [color=red]
+      HttpCallbackSubscriptionService -> SubscribersKeeperActor [label="MarathonSubscriptionEvent"]
+      HttpCallbackSubscriptionService -> SubscribersKeeperActor [label="SubscribersKeeperActor.GetSubscribers"]
+      HttpEventActor -> SubscribersKeeperActor [label="SubscribersKeeperActor.GetSubscribers"]
+      HttpEventModule -> SubscribersKeeperActor [label="Subscribe"]
+      MarathonHealthCheckManager -> HealthCheckActor [label="GetTaskHealth"]
+      MarathonSchedulerActor -> DeploymentManager [label="RetrieveRunningDeployments"]
+      MarathonSchedulerService -> MarathonSchedulerActor [label="RetrieveRunningDeployments"]
+  }
+
+}
+

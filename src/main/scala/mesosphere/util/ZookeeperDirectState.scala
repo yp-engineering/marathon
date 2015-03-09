@@ -3,20 +3,18 @@ package mesosphere.util
 import java.lang.Boolean
 import java.util
 import java.util.UUID
-import java.util.concurrent.{ Future => JFuture }
+import java.util.concurrent.{ Callable, ExecutorService, Future => JFuture }
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, Future, TimeoutException }
+import scala.concurrent.{ ExecutionContext, Await, Future, TimeoutException }
 import scala.util.{ Failure, Success }
 
 import com.google.protobuf.ByteString
-import mesosphere.marathon.Protos
+import mesosphere.marathon.{ ConflictingChangeException, Protos }
 import org.apache.curator.framework._
 import org.apache.curator.retry.ExponentialBackoffRetry
 import org.apache.curator.utils.ZKPaths
 import org.apache.mesos.state.{ State, Variable }
-import org.apache.zookeeper.data.Stat
 
 /**
   * A type of State that persists data in the form of a mesosphere.marathon.Protos.Entry
@@ -28,11 +26,12 @@ class ZookeeperDirectState(
   zNode: String,
   serverList: String,
   sessionTimeout: Duration,
-  connectionTimeout: Duration)
+  connectionTimeout: Duration,
+  executorService: ExecutorService)
     extends State
-    with JavaScalaFutureSupport
     with Logging {
 
+  private implicit val executionContext: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
   private val eventualCuratorClient: Future[CuratorFramework] = createZookeeperClient()
 
   /**
@@ -41,7 +40,7 @@ class ZookeeperDirectState(
     * *
     * @param duration the max amount of time to wait
     */
-  def await(duration: Duration): Unit = {
+  def awaitConnection(duration: Duration): Unit = {
     Await.ready(eventualCuratorClient, duration)
   }
 
@@ -57,7 +56,7 @@ class ZookeeperDirectState(
   /**
     * Unmarshall an Entry from Zookeeper and return it as an eventual Variable
     */
-  private def handleFetch(name: String): Future[Variable] = Future {
+  override def fetch(name: String): JFuture[Variable] = jfuture {
 
     if (!exists(name)) {
       new LocalVariable(name)
@@ -77,7 +76,15 @@ class ZookeeperDirectState(
   /**
     * Marshall a variable to an Entry and store it in Zookeeper
     */
-  private def handleStore(lv: LocalVariable): Future[Variable] = Future {
+
+  override def store(variable: Variable): JFuture[Variable] = variable match {
+    case v: LocalVariable =>
+      store(v)
+    case _ =>
+      throw new ConflictingChangeException("An unexpected variable was encountered for a Zookeeper operation")
+  }
+
+  private def store(lv: LocalVariable): JFuture[Variable] = jfuture {
 
     val persistedVariable = fetch(lv.name).get.asInstanceOf[LocalVariable]
     val inputMatchesPersistedVersion = persistedVariable.storedUuid == lv.storedUuid
@@ -105,7 +112,14 @@ class ZookeeperDirectState(
   /**
     * Remove the variable from our Zookeeper node. Returns false if deletion was not necessary.
     */
-  private def handleExpunge(lv: LocalVariable): Future[Boolean] = Future {
+  override def expunge(variable: Variable): JFuture[Boolean] = variable match {
+    case v: LocalVariable =>
+      expunge(v)
+    case _ =>
+      throw new ConflictingChangeException("An unexpected variable was encountered for a Zookeeper operation")
+  }
+
+  private def expunge(lv: LocalVariable): JFuture[Boolean] = jfuture {
 
     if (exists(lv.name)) {
       client.delete().forPath(fullPath(lv.name))
@@ -117,8 +131,8 @@ class ZookeeperDirectState(
   /**
     * Return the children of a Zookeeper node
     */
-  private def handleNames: Future[util.Iterator[String]] = {
-    Future { client.getChildren.forPath(zNode).iterator() }
+  override def names: JFuture[util.Iterator[String]] = {
+    jfuture { client.getChildren.forPath(zNode).iterator() }
   }
 
   private def fullPath(name: String) = s"$zNode/$name"
@@ -160,14 +174,12 @@ class ZookeeperDirectState(
     }
   }
 
-  // Wrap our local Scala-Future-returning methods with Java-Future-returning methods
-  // to satisfy the base State interface.
-  override def names(): JFuture[util.Iterator[String]] = handleNames.asJava(sessionTimeout)
-  override def fetch(name: String): JFuture[Variable] = handleFetch(name).asJava(sessionTimeout)
-  override def store(v: Variable): JFuture[Variable] =
-    handleStore(v.asInstanceOf[LocalVariable]).asJava(sessionTimeout)
-  override def expunge(v: Variable): JFuture[Boolean] =
-    handleExpunge(v.asInstanceOf[LocalVariable]).asJava(sessionTimeout)
+  /**
+    * Wraps a function literal with a Java Future using the executorService class variable
+    */
+  private def jfuture[A](f: => A): JFuture[A] = {
+    executorService.submit(new Callable[A]() { def call(): A = f })
+  }
 
 }
 

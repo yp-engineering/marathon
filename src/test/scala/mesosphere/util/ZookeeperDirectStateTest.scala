@@ -1,11 +1,10 @@
 package mesosphere.util
 
-import java.util.concurrent.TimeUnit._
-
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.util.Random
 
 import mesosphere.marathon.MarathonSpec
+import mesosphere.marathon.event.http.HttpEventModule
 import org.apache.curator.test.TestingServer
 import org.apache.mesos.state.{ Variable, State, ZooKeeperState }
 import scala.collection.JavaConverters._
@@ -19,7 +18,7 @@ class ZookeeperDirectStateTest
     with RandomTestUtils {
 
   val znode = "/" + randomString(10)
-  val timeout = Duration(5, SECONDS)
+  val timeout = 25.seconds
 
   lazy val zkJNIState = new ZooKeeperState(
     zkServerList,
@@ -32,9 +31,10 @@ class ZookeeperDirectStateTest
     znode,
     zkServerList,
     timeout,
-    timeout
+    timeout,
+    HttpEventModule.executorService
   )
-  zkDirectState.await(timeout)
+  zkDirectState.awaitConnection(timeout)
 
   // Run the standard suite of tests on both State implementations
   testsFor(testState(zkDirectState, "ZookeeperDirectState - "))

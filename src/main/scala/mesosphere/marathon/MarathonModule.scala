@@ -3,6 +3,7 @@ package mesosphere.marathon
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Named
+import mesosphere.marathon.event.http.HttpEventModule
 import mesosphere.marathon.upgrade.DeploymentPlan
 
 import scala.util.control.NonFatal
@@ -74,11 +75,12 @@ class MarathonModule(conf: MarathonConf, http: HttpConf, zk: ZooKeeperClient)
       conf.zooKeeperStatePath(),
       conf.zkHosts,
       conf.zkTimeoutDuration,
-      conf.zkTimeoutDuration
+      conf.zkTimeoutDuration,
+      HttpEventModule.executorService
     )
 
     // It's safe to block here until Zookeeper is connected
-    zds.await(conf.zkTimeoutDuration)
+    zds.awaitConnection(conf.zkTimeoutDuration)
 
     zds
   }

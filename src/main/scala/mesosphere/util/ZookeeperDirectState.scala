@@ -17,11 +17,19 @@ import org.apache.curator.utils.ZKPaths
 import org.apache.mesos.state.{ State, Variable }
 
 /**
-  * A type of State that persists data in the form of a mesosphere.marathon.Protos.Entry
-  * protocol buffer message to Zookeeper.
-  *
-  * Does not use JNI or the native libmesos library, unlike "ZooKeeperState"
-  */
+ * A State implementation that persists data to Zookeeper in the form of a
+ * mesosphere.marathon.Protos.Entry protocol buffer message.
+ *
+ * Unlike org.apache.mesos.state.ZooKeeperState, this class does not use the libmesos
+ * native library for persistence. This avoids a JVM crashing issue present in 
+ * libmesos as of March 2015. After libmesos is patched and the fix can be ascertained,
+ * this class will likely be deprecated.
+ *
+ * The crashing issue is documented in these tickets:
+ * https://issues.apache.org/jira/browse/MESOS-1795
+ * https://github.com/mesosphere/marathon/issues/834
+ *
+ */
 class ZookeeperDirectState(
   zNode: String,
   serverList: String,

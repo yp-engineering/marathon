@@ -37,7 +37,7 @@ trait ExternalMarathonIntegrationTest {
   def config: IntegrationTestConfig
 
   def env = {
-    val envName = "MESOS_NATIVE_LIBRARY"
+    val envName = "MESOS_NATIVE_JAVA_LIBRARY"
     if (sys.env.contains(envName)) sys.env else sys.env + (envName -> config.mesosLib)
   }
 
